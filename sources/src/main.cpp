@@ -46,7 +46,7 @@ void setup()
 
 void loop()
 {
-  if ((digitalRead(LBUTTON) == LOW) & (pos > 0))
+ if ((digitalRead(LBUTTON) == LOW) & (pos > 0))
   {
     pos--;
   }

@@ -20,27 +20,37 @@ int pos = 90;
 #define CLK_PIN 7
 #define LATCH_PIN 4
 
-void SendDataToSegment(byte Segment_no, byte hexValue);
+void SendDataToSegment(byte Segment_no, byte Segments);
 
-const byte C_HEX = 0xC6;
-const byte TWO_HEX = 0xA4;
-const byte P_HEX = 0x8C;
-
-const char LED_a = 0xFE;
-const byte LED_b = 0xFD;
-const byte LED_c = 0xFB;
-const byte LED_d = 0xF7;
-const byte LED_e = 0xEF;
-const byte LED_f = 0xDF;
-const byte LED_g = 0xBF;
-const char LED_dp = 0x7F;
+const byte LED_a = 0x01;
+const byte LED_b = 0x02;
+const byte LED_c = 0x04;
+const byte LED_d = 0x08;
+const byte LED_e = 0x10;
+const byte LED_f = 0x20;
+const byte LED_g = 0x40;
+const byte LED_dp = 0x80;
 
 byte select_seg1 = 0xF1;
 byte select_seg2 = 0xF2;
 byte select_seg3 = 0xF4;
 byte select_seg4 = 0xF8;
 
+byte nums[] = {
+    LED_a + LED_b + LED_c + LED_d + LED_e + LED_f,
+    LED_b + LED_c,
+    LED_a + LED_b + LED_g + LED_e + LED_d,
+    LED_a + LED_b + LED_g + LED_c + LED_d,
+    LED_f + LED_g + LED_b + LED_c,
+    LED_a + LED_f + LED_g + LED_c + LED_d,
+    LED_a + LED_c + LED_d + LED_e + LED_f + LED_g,
+    LED_a + LED_b + LED_c,
+    LED_a + LED_b + LED_c + LED_d + LED_e + LED_f + LED_g,
+    LED_a + LED_b + LED_c + LED_d + LED_f + LED_g};
+
 const byte SEGMENT_SELECT[] = {0xF1, 0xF2, 0xF4, 0xF8};
+
+unsigned long ms, old;
 
 void setup()
 {
@@ -60,28 +70,43 @@ void setup()
 
 void loop()
 {
-  if ((digitalRead(LBUTTON) == LOW) & (pos > 0))
+  ms = millis();
+  if (ms >= (old + 25))
   {
-    pos--;
+    old = ms;
+    if ((digitalRead(LBUTTON) == LOW) & (pos > 0))
+    {
+      pos--;
+    }
+    if (digitalRead(MBUTTON) == LOW)
+    {
+      pos = 90;
+    }
+    if ((digitalRead(RBUTTON) == LOW) & (pos < 180))
+    {
+      pos++;
+    }
+    myservo.write(pos);
   }
-  if ((digitalRead(RBUTTON) == LOW) & (pos < 255))
-  {
-    pos++;
-  }
-  myservo.write(pos);
-  // delay(25);
-  SendDataToSegment(select_seg1, LED_e);
-  SendDataToSegment(select_seg2, LED_f);
-  SendDataToSegment(select_seg3, LED_g);
-  SendDataToSegment(select_seg4, LED_dp);
+  byte dummy = pos;
+  byte value = 0;
+  SendDataToSegment(select_seg1, 0x00);
+  value = dummy % 100;
+  dummy = value * 100;
+  SendDataToSegment(select_seg2, nums[value]);
+  value = dummy % 10;
+  dummy = value * 10;
+  SendDataToSegment(select_seg3, nums[value]);
+  value = dummy;
+  SendDataToSegment(select_seg4, nums[value]);
 }
 
-void SendDataToSegment(byte Segment_no, byte hexValue)
+void SendDataToSegment(byte Segment_no, byte Segments)
 {
   /* Make Latch pin Low */
   digitalWrite(LATCH_PIN, LOW);
   /* Transfer Segmenent data */
-  shiftOut(DATA_PIN, CLK_PIN, MSBFIRST, hexValue);
+  shiftOut(DATA_PIN, CLK_PIN, MSBFIRST, 0xFF - Segments);
   /* Transfer Segmenent Number  */
   shiftOut(DATA_PIN, CLK_PIN, MSBFIRST, Segment_no);
   /* Make Latch pin High so the data appear on Latch parallel pins */

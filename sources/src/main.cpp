@@ -90,25 +90,33 @@ void setup()
 void loop()
 {
   ms = millis();
-  if (((mode == MODE_POS) & (ms >= (old + 25))) |
-      ((mode == MODE_TIME) & (ms >= (old + 5))))
+  if (ms >= (old + 25))
   {
     old = ms;
-    if ((digitalRead(LBUTTON) == LOW) & (pos > min))
+
+    if (digitalRead(LBUTTON) == LOW)
     {
-      pos--;
+      if ((mode == MODE_POS) && (pos > min))
+        pos--;
+      if ((mode == MODE_TIME) && (pos >= min + 5))
+        pos -= 5;
     }
-    //*************************************************************************
-    if (digitalRead(MBUTTON) == HIGH)
+
+    if (digitalRead(RBUTTON) == LOW)
     {
-      mb_lock = false;
+      if ((mode == MODE_POS) && (pos < max))
+        pos++;
+      if ((mode == MODE_TIME) && (pos <= max - 5))
+        pos += 5;
     }
-    if (!mb_lock & (digitalRead(MBUTTON) == LOW))
+
+    if (!mb_lock && (digitalRead(MBUTTON) == LOW))
     {
       mb_time++;
       // long press > 1000 ms (20*25)
       if (mb_time > 20)
       {
+        // switch mode
         if (mode == MODE_POS)
         {
           mode = MODE_TIME;
@@ -124,60 +132,26 @@ void loop()
           max = P_MAX;
         }
         pos = middle;
-        // switch mode
-        digitalWrite(BEEPER, LOW);
-        delay(50);
-        digitalWrite(BEEPER, HIGH);
-        // wait for release button
         mb_lock = true;
-        mb_time = 0;
+        // confirmation beep
+        digitalWrite(BEEPER, LOW);
+        delay(25);
+        digitalWrite(BEEPER, HIGH);
       }
     }
-    /*
-        // detect low -> high edge
-        if ((digitalRead(MBUTTON) == HIGH) & (mb_oldstate == LOW))
-        {
-          // short press < 1000 ms (20*25)
-          if ((mb_time > 0) & (mb_time < 20))
-          {
-            // rotate beween min, minddle, max
-            if ((pos != min) & (pos != middle) & (pos != max))
-            {
-              pos = middle;
-            }
-            else if (pos == min)
-            {
-              pos = middle;
-            }
-            else if (pos == middle)
-            {
-              pos = max;
-            }
-            else if (pos == max)
-            {
-              pos = min;
-            }
-          }
-          mb_time = 0;
-        }
-        */
-    //*************************************************************************
-    if ((digitalRead(RBUTTON) == LOW) & (pos < max))
+    if (digitalRead(MBUTTON) == HIGH)
     {
-      pos++;
+      mb_time = 0;
+      mb_lock = false;
     }
 
     if (mode == MODE_POS)
-    {
       myservo.write(pos);
-    }
     else if (mode == MODE_TIME)
-    {
       myservo.writeMicroseconds(pos);
-    }
 
   } // this block runs every 25ms
-  SendNumberToDisplay(mb_time);
+  SendNumberToDisplay(pos);
 }
 
 void SendNumberToDisplay(unsigned int value)

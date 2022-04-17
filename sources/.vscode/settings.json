@@ -1,0 +1,5 @@
+{
+    "beautify.config": {
+        "brace_style": "collapse,preserve-inline"
+    }
+}

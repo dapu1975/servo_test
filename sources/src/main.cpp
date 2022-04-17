@@ -9,9 +9,6 @@
 #define BEEPER 3
 #define SERVO 5
 
-Servo myservo;
-int pos = 90;
-
 #define LBUTTON 15
 #define MBUTTON 16
 #define RBUTTON 17
@@ -20,28 +17,47 @@ int pos = 90;
 #define CLK_PIN 7
 #define LATCH_PIN 4
 
+#define MODE_POS 0x00
+#define MODE_TIME 0x01
+
+#define LED_a 0x01
+#define LED_b 0x02
+#define LED_c 0x04
+#define LED_d 0x08
+#define LED_e 0x10
+#define LED_f 0x20
+#define LED_g 0x40
+#define LED_dp 0x80
+
+#define select_seg1 0xF1
+#define select_seg2 0xF2
+#define select_seg3 0xF4
+#define select_seg4 0xF8
+
+#define P_MIN 0
+#define P_MIDDLE 90
+#define P_MAX 180
+
+#define T_MIN 0
+#define T_MIDDLE 1250
+#define T_MAX 2500
+
+Servo myservo;
+
 void SendNumberToDisplay(unsigned int value);
 void SendDataToSegment(byte Segment_no, byte Segments);
 
-byte mode = 0;
+unsigned int mb_time = 0; // counts in 25 ms steps duration of pressing
+boolean mb_oldstate;      // button state in last loop
+boolean mb_lock;          // button deactive -> wait for release
 
-byte min = 0;
-byte middle = 90;
-byte max = 180;
+byte mode = MODE_POS;
+unsigned int min = P_MIN;
+unsigned int middle = P_MIDDLE;
+unsigned int max = P_MAX;
+unsigned int pos = P_MIDDLE;
 
-const byte LED_a = 0x01;
-const byte LED_b = 0x02;
-const byte LED_c = 0x04;
-const byte LED_d = 0x08;
-const byte LED_e = 0x10;
-const byte LED_f = 0x20;
-const byte LED_g = 0x40;
-const byte LED_dp = 0x80;
-
-byte select_seg1 = 0xF1;
-byte select_seg2 = 0xF2;
-byte select_seg3 = 0xF4;
-byte select_seg4 = 0xF8;
+unsigned long ms, old;
 
 byte nums_seg[] = {
     LED_a + LED_b + LED_c + LED_d + LED_e + LED_f,
@@ -55,10 +71,6 @@ byte nums_seg[] = {
     LED_a + LED_b + LED_c + LED_d + LED_e + LED_f + LED_g,
     LED_a + LED_b + LED_c + LED_d + LED_f + LED_g};
 
-const byte SEGMENT_SELECT[] = {0xF1, 0xF2, 0xF4, 0xF8};
-
-unsigned long ms, old;
-
 void setup()
 {
   pinMode(BEEPER, OUTPUT);
@@ -66,9 +78,9 @@ void setup()
 
   myservo.attach(SERVO);
 
-  pinMode(LBUTTON, INPUT);
-  pinMode(MBUTTON, INPUT);
-  pinMode(RBUTTON, INPUT);
+  pinMode(LBUTTON, INPUT_PULLUP);
+  pinMode(MBUTTON, INPUT_PULLUP);
+  pinMode(RBUTTON, INPUT_PULLUP);
 
   pinMode(LATCH_PIN, OUTPUT);
   pinMode(CLK_PIN, OUTPUT);
@@ -78,53 +90,122 @@ void setup()
 void loop()
 {
   ms = millis();
-  if (ms >= (old + 25))
+  if (((mode == MODE_POS) & (ms >= (old + 25))) |
+      ((mode == MODE_TIME) & (ms >= (old + 5))))
   {
     old = ms;
     if ((digitalRead(LBUTTON) == LOW) & (pos > min))
     {
       pos--;
     }
-    if (digitalRead(MBUTTON) == LOW)
-    // short press : rotates minimun, middle, maximun
-    // long press  : switches analog / digital timing
+    //*************************************************************************
+    if (digitalRead(MBUTTON) == HIGH)
     {
-      if ((pos != min) & (pos != middle) & (pos != max))
+      mb_lock = false;
+    }
+    if (!mb_lock & (digitalRead(MBUTTON) == LOW))
+    {
+      mb_time++;
+      // long press > 1000 ms (20*25)
+      if (mb_time > 20)
       {
+        if (mode == MODE_POS)
+        {
+          mode = MODE_TIME;
+          min = T_MIN;
+          middle = T_MIDDLE;
+          max = T_MAX;
+        }
+        else
+        {
+          mode = MODE_POS;
+          min = P_MIN;
+          middle = P_MIDDLE;
+          max = P_MAX;
+        }
         pos = middle;
-      }
-      else if (pos == min)
-      {
-        pos = middle;
-      }
-      else if (pos == middle)
-      {
-        pos = max;
-      }
-      else if (pos == max)
-      {
-        pos = min;
+        // switch mode
+        digitalWrite(BEEPER, LOW);
+        delay(50);
+        digitalWrite(BEEPER, HIGH);
+        // wait for release button
+        mb_lock = true;
+        mb_time = 0;
       }
     }
-
+    /*
+        // detect low -> high edge
+        if ((digitalRead(MBUTTON) == HIGH) & (mb_oldstate == LOW))
+        {
+          // short press < 1000 ms (20*25)
+          if ((mb_time > 0) & (mb_time < 20))
+          {
+            // rotate beween min, minddle, max
+            if ((pos != min) & (pos != middle) & (pos != max))
+            {
+              pos = middle;
+            }
+            else if (pos == min)
+            {
+              pos = middle;
+            }
+            else if (pos == middle)
+            {
+              pos = max;
+            }
+            else if (pos == max)
+            {
+              pos = min;
+            }
+          }
+          mb_time = 0;
+        }
+        */
+    //*************************************************************************
     if ((digitalRead(RBUTTON) == LOW) & (pos < max))
     {
       pos++;
     }
-    myservo.write(pos);
-  }
-  SendNumberToDisplay(pos);
+
+    if (mode == MODE_POS)
+    {
+      myservo.write(pos);
+    }
+    else if (mode == MODE_TIME)
+    {
+      myservo.writeMicroseconds(pos);
+    }
+
+  } // this block runs every 25ms
+  SendNumberToDisplay(mb_time);
 }
 
 void SendNumberToDisplay(unsigned int value)
 {
-  SendDataToSegment(select_seg1, nums_seg[value / 1000]);
+  byte add_val = 0x00;
+  if (mode == MODE_POS)
+  {
+    add_val = LED_dp;
+  }
+  else
+  {
+    add_val = 0x00;
+  }
+  SendDataToSegment(select_seg1, nums_seg[value / 1000] + add_val);
   value -= (value / 1000) * 1000;
   SendDataToSegment(select_seg2, nums_seg[value / 100]);
   value -= (value / 100) * 100;
   SendDataToSegment(select_seg3, nums_seg[value / 10]);
   value -= (value / 10) * 10;
-  SendDataToSegment(select_seg4, nums_seg[value]);
+  if (mode == MODE_TIME)
+  {
+    add_val = LED_dp;
+  }
+  else
+  {
+    add_val = 0x00;
+  }
+  SendDataToSegment(select_seg4, nums_seg[value] + add_val);
 }
 
 void SendDataToSegment(byte Segment_no, byte Segments)

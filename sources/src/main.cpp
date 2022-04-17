@@ -20,6 +20,7 @@ int pos = 90;
 #define CLK_PIN 7
 #define LATCH_PIN 4
 
+void SendNumberToDisplay(unsigned int value);
 void SendDataToSegment(byte Segment_no, byte Segments);
 
 const byte LED_a = 0x01;
@@ -36,7 +37,7 @@ byte select_seg2 = 0xF2;
 byte select_seg3 = 0xF4;
 byte select_seg4 = 0xF8;
 
-byte nums[] = {
+byte nums_seg[] = {
     LED_a + LED_b + LED_c + LED_d + LED_e + LED_f,
     LED_b + LED_c,
     LED_a + LED_b + LED_g + LED_e + LED_d,
@@ -79,6 +80,8 @@ void loop()
       pos--;
     }
     if (digitalRead(MBUTTON) == LOW)
+    // short press : rotates minimun, middle, maximun
+    // long press  : switches analog / digital timing
     {
       pos = 90;
     }
@@ -88,17 +91,18 @@ void loop()
     }
     myservo.write(pos);
   }
-  byte dummy = pos;
-  byte value = 0;
-  SendDataToSegment(select_seg1, 0x00);
-  value = dummy % 100;
-  dummy = value * 100;
-  SendDataToSegment(select_seg2, nums[value]);
-  value = dummy % 10;
-  dummy = value * 10;
-  SendDataToSegment(select_seg3, nums[value]);
-  value = dummy;
-  SendDataToSegment(select_seg4, nums[value]);
+  SendNumberToDisplay(pos);
+}
+
+void SendNumberToDisplay(unsigned int value)
+{
+  SendDataToSegment(select_seg1, nums_seg[value / 1000]);
+  value -= (value / 1000) * 1000;
+  SendDataToSegment(select_seg2, nums_seg[value / 100]);
+  value -= (value / 100) * 100;
+  SendDataToSegment(select_seg3, nums_seg[value / 10]);
+  value -= (value / 10) * 10;
+  SendDataToSegment(select_seg4, nums_seg[value]);
 }
 
 void SendDataToSegment(byte Segment_no, byte Segments)

@@ -2,6 +2,8 @@
 // project: servo tester
 // author: Daniel Pust
 // create: 2022-04-14
+// working: 2022-04-18
+// version: 1.0
 //*****************************************************************************
 #include <Arduino.h>
 #include <Servo.h>
@@ -47,9 +49,9 @@ Servo myservo;
 void SendNumberToDisplay(unsigned int value);
 void SendDataToSegment(byte Segment_no, byte Segments);
 
-unsigned int mb_time = 0; // counts in 25 ms steps duration of pressing
-boolean mb_oldstate;      // button state in last loop
-boolean mb_lock;          // button deactive -> wait for release
+unsigned int mb_time = 0;   // counts in 25 ms steps duration of pressing
+boolean mb_oldstate = HIGH; // button state in last loop
+boolean mb_lock;            // button deactive -> wait for release
 
 byte mode = MODE_POS;
 unsigned int min = P_MIN;
@@ -139,11 +141,25 @@ void loop()
         digitalWrite(BEEPER, HIGH);
       }
     }
-    if (digitalRead(MBUTTON) == HIGH)
+    boolean state = digitalRead(MBUTTON);
+    if ((state == HIGH) && (mb_oldstate == LOW))
     {
       mb_time = 0;
-      mb_lock = false;
+      if (mb_lock == true)
+        mb_lock = false;
+      else
+      {
+        if ((pos != min) && (pos != middle) && (pos != max))
+          pos = middle;
+        else if (pos == min)
+          pos = middle;
+        else if (pos == middle)
+          pos = max;
+        else if (pos == max)
+          pos = min;
+      }
     }
+    mb_oldstate = state;
 
     if (mode == MODE_POS)
       myservo.write(pos);
